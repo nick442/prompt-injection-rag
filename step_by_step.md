@@ -14,6 +14,8 @@ Use this checklist to implement the research plan end‑to‑end. We will update
 - [x] Configure pipeline (no defenses); verify heavy model path
 - [x] Fetch standardized datasets (deepset, injecagent, pint-example) into `data/attack_payloads/`
 - [x] Run E1 baseline (pilot, pipeline, deepset subset): compute ASR and latencies
+- [x] Switch to existing vector DB (use `/Users/nickwiebe/old-Thesis/local_rag_system/data/rag_vectors__e2_fiqa_e5_fp32.db`, collection `e2_fiqa_e5_fp32`; probe schema/dim)
+- [x] Run E1 baseline (pilot, agent, InjecAgent subset): compute ASR and latencies
 - [ ] Configure and run full E1 baseline across all datasets and agent mode
 - [ ] Save full baseline results to `experiments/baseline/` (JSON/CSV)
 
