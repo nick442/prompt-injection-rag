@@ -6,6 +6,14 @@ Manages available tools and their schemas for function calling.
 import logging
 from typing import Dict, Any, List, Optional
 
+import importlib
+from pathlib import Path
+
+try:
+    import yaml
+except Exception:
+    yaml = None
+
 
 class ToolRegistry:
     """Registry of available tools for the agent."""
@@ -126,3 +134,94 @@ def create_tool_registry(tool_instances: Optional[List[Any]] = None) -> ToolRegi
             registry.register_tool(tool)
 
     return registry
+
+
+def build_tool_registry_from_config(
+    config_path: Optional[str] = None,
+    enabled_tools: Optional[List[str]] = None,
+) -> ToolRegistry:
+    """
+    Build a ToolRegistry using configuration and a list of tool names.
+
+    Args:
+        config_path: Path to agent config YAML (defaults to config/agent_config.yaml)
+        enabled_tools: If provided, use this explicit list; otherwise load from config
+
+    Returns:
+        Initialized ToolRegistry with tool instances
+    """
+    cfg = {}
+    if not config_path:
+        # Default to repo-level config
+        default_path = Path("config") / "agent_config.yaml"
+        config_path = str(default_path)
+
+    if yaml is not None and Path(config_path).exists():
+        try:
+            with open(config_path, "r") as f:
+                cfg = yaml.safe_load(f) or {}
+        except Exception:
+            cfg = {}
+
+    tools_cfg = (cfg.get("tools") or {})
+
+    # Determine which tools to enable
+    tool_names: List[str] = enabled_tools if enabled_tools is not None else tools_cfg.get("enabled", [])
+
+    instances: List[Any] = []
+
+    # Helper to import a class from tools package
+    def _new_tool(module_name: str, class_name: str, kwargs: Optional[Dict[str, Any]] = None):
+        mod = importlib.import_module(f"tools.{module_name}")
+        cls = getattr(mod, class_name)
+        return cls(**(kwargs or {}))
+
+    for name in tool_names:
+        try:
+            if name == "calculator":
+                # No constructor args
+                instances.append(_new_tool("calculator", "CalculatorTool"))
+            elif name == "file_reader":
+                fr_cfg = tools_cfg.get("file_reader", {}) if isinstance(tools_cfg, dict) else {}
+                instances.append(
+                    _new_tool(
+                        "file_reader",
+                        "FileReaderTool",
+                        {
+                            "allowed_directories": fr_cfg.get("allowed_directories"),
+                            "max_file_size_kb": fr_cfg.get("max_file_size_kb", 1024),
+                        },
+                    )
+                )
+            elif name == "web_search":
+                ws_cfg = tools_cfg.get("web_search", {}) if isinstance(tools_cfg, dict) else {}
+                instances.append(
+                    _new_tool(
+                        "web_search",
+                        "WebSearchTool",
+                        {
+                            "mock_mode": ws_cfg.get("mock_mode", True),
+                            "max_results": ws_cfg.get("max_results", 5),
+                        },
+                    )
+                )
+            elif name == "database_query":
+                db_cfg = tools_cfg.get("database_query", {}) if isinstance(tools_cfg, dict) else {}
+                instances.append(
+                    _new_tool(
+                        "database_query",
+                        "DatabaseQueryTool",
+                        {
+                            "mock_mode": db_cfg.get("mock_mode", True),
+                            "max_results": db_cfg.get("max_results", 100),
+                        },
+                    )
+                )
+            else:
+                # Unknown tool name; skip silently for research flexibility
+                continue
+        except Exception:
+            # If a tool fails to instantiate, continue with others
+            continue
+
+    return create_tool_registry(instances)

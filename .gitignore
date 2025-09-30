@@ -1,32 +1,35 @@
+## Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
 
-  # Python
-  __pycache__/
-  *.py[cod]
-  *$py.class
-  *.so
-  .Python
-  env/
-  venv/
-  *.egg-info/
+## Data
+data/
+*.db
+*.pkl
 
-  # Data
-  data/
-  *.db
-  *.pkl
+## Models
+models/
+*.gguf
 
-  # Models
-  models/
-  *.gguf
+## IDE
+.vscode/
+.idea/
+*.swp
 
-  # IDE
-  .vscode/
-  .idea/
-  *.swp
+## Logs
+logs/
+*.log
 
-  # Logs
-  logs/
-  *.log
+## Experiments
+experiments/*/results/
+experiments/*/logs/
 
-  # Experiments
-  experiments/*/results/
-  experiments/*/logs/
+## Local configuration
+CLAUDE.md
+.serena/
