@@ -5,9 +5,15 @@ Implements Reasoning + Acting loop for multi-step problem solving.
 
 import logging
 from typing import Dict, Any, List, Optional
+from pathlib import Path
+
+try:
+    import yaml
+except Exception:
+    yaml = None
 
 from ..core.rag_pipeline import RAGPipeline
-from .tool_registry import ToolRegistry
+from .tool_registry import ToolRegistry, build_tool_registry_from_config
 from .tool_parser import ToolParser
 from .tool_executor import ToolExecutor
 
@@ -24,7 +30,10 @@ class ReACTAgent:
     """
 
     def __init__(self, rag_pipeline: RAGPipeline, tool_registry: ToolRegistry,
-                 max_iterations: int = 10, temperature: float = 0.7):
+                 max_iterations: int = 10, temperature: float = 0.7,
+                 parser_strict_validation: bool = False,
+                 enable_logging: bool = True,
+                 require_approval: bool = False):
         """
         Initialize ReACT agent.
 
@@ -39,8 +48,12 @@ class ReACTAgent:
         self.max_iterations = max_iterations
         self.temperature = temperature
 
-        self.tool_parser = ToolParser(strict_validation=False)
-        self.tool_executor = ToolExecutor(tool_registry, enable_logging=True)
+        self.tool_parser = ToolParser(strict_validation=parser_strict_validation)
+        self.tool_executor = ToolExecutor(
+            tool_registry,
+            enable_logging=enable_logging,
+            require_approval=require_approval,
+        )
 
         self.logger = logging.getLogger(__name__)
 
@@ -185,6 +198,56 @@ Always provide a Final Answer when you have enough information."""
             return f"Error: {execution_result.error}"
 
 
-def create_react_agent(rag_pipeline: RAGPipeline, tool_registry: ToolRegistry, **kwargs) -> ReACTAgent:
-    """Factory function to create a ReACTAgent."""
-    return ReACTAgent(rag_pipeline, tool_registry, **kwargs)
+def create_react_agent(
+    rag_pipeline: RAGPipeline,
+    tool_registry: Optional[ToolRegistry] = None,
+    tools: Optional[List[str]] = None,
+    agent_config_path: Optional[str] = None,
+    **kwargs,
+) -> ReACTAgent:
+    """Factory function to create a ReACTAgent.
+
+    Supports either passing an existing ToolRegistry or a list of tool names.
+    Optionally reads configuration from agent_config.yaml.
+    """
+    # Load config if available
+    cfg = {}
+    if agent_config_path is None:
+        default_cfg = Path("config") / "agent_config.yaml"
+        if default_cfg.exists() and yaml is not None:
+            agent_config_path = str(default_cfg)
+    if agent_config_path and yaml is not None and Path(agent_config_path).exists():
+        try:
+            with open(agent_config_path, "r") as f:
+                cfg = yaml.safe_load(f) or {}
+        except Exception:
+            cfg = {}
+
+    # Tool registry construction
+    if tool_registry is None:
+        tool_registry = build_tool_registry_from_config(
+            config_path=agent_config_path,
+            enabled_tools=tools,
+        )
+
+    # Defaults from config with kwargs override
+    react_cfg = cfg.get("react", {}) if isinstance(cfg, dict) else {}
+    parsing_cfg = cfg.get("parsing", {}) if isinstance(cfg, dict) else {}
+    safety_cfg = cfg.get("safety", {}) if isinstance(cfg, dict) else {}
+
+    max_iterations = kwargs.pop("max_iterations", react_cfg.get("max_iterations", 10))
+    temperature = kwargs.pop("temperature", react_cfg.get("temperature", 0.7))
+    enable_logging = kwargs.pop("enable_logging", react_cfg.get("enable_logging", True))
+    parser_strict = kwargs.pop("parser_strict_validation", parsing_cfg.get("strict_validation", False))
+    require_approval = kwargs.pop("require_approval", safety_cfg.get("require_approval", False))
+
+    return ReACTAgent(
+        rag_pipeline,
+        tool_registry,
+        max_iterations=max_iterations,
+        temperature=temperature,
+        parser_strict_validation=parser_strict,
+        enable_logging=enable_logging,
+        require_approval=require_approval,
+        **kwargs,
+    )

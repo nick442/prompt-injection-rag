@@ -203,33 +203,48 @@ class VectorDatabase:
         with self._get_connection() as conn:
             cursor = conn.cursor()
 
+            # Use FTS5 bm25() ranking (lower is better). We will convert to a
+            # higher-is-better score for consistency with vector similarity.
             if collection_id:
-                cursor.execute("""
-                    SELECT f.chunk_id, f.rank, c.content, c.metadata_json
+                cursor.execute(
+                    """
+                    SELECT f.chunk_id,
+                           bm25(chunks_fts) AS bm25_score,
+                           c.content,
+                           c.metadata_json
                     FROM chunks_fts f
                     JOIN chunks c ON f.chunk_id = c.chunk_id
                     WHERE f.content MATCH ? AND c.collection_id = ?
-                    ORDER BY f.rank
+                    ORDER BY bm25_score ASC
                     LIMIT ?
-                """, (query, collection_id, k))
+                    """,
+                    (query, collection_id, k),
+                )
             else:
-                cursor.execute("""
-                    SELECT f.chunk_id, f.rank, c.content, c.metadata_json
+                cursor.execute(
+                    """
+                    SELECT f.chunk_id,
+                           bm25(chunks_fts) AS bm25_score,
+                           c.content,
+                           c.metadata_json
                     FROM chunks_fts f
                     JOIN chunks c ON f.chunk_id = c.chunk_id
                     WHERE f.content MATCH ?
-                    ORDER BY f.rank
+                    ORDER BY bm25_score ASC
                     LIMIT ?
-                """, (query, k))
+                    """,
+                    (query, k),
+                )
 
             rows = cursor.fetchall()
             results = []
             for row in rows:
-                chunk_id = row['chunk_id']
-                # FTS5 rank is negative (lower is better), normalize to positive score
-                score = -float(row['rank'])
-                content = row['content']
-                metadata = json.loads(row['metadata_json'])
+                chunk_id = row["chunk_id"]
+                # Convert bm25 (lower is better) to a normalized [0,1] score
+                bm25_val = float(row["bm25_score"]) if row["bm25_score"] is not None else 0.0
+                score = 1.0 / (1.0 + bm25_val)
+                content = row["content"]
+                metadata = json.loads(row["metadata_json"])
                 results.append((chunk_id, content, score, metadata))
 
             return results

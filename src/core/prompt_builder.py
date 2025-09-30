@@ -27,6 +27,17 @@ class RetrievalResult:
         self.doc_id = doc_id
         self.chunk_index = chunk_index
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize retrieval result for downstream consumers."""
+        return {
+            'chunk_id': self.chunk_id,
+            'content': self.content,
+            'score': self.score,
+            'metadata': self.metadata,
+            'doc_id': self.doc_id,
+            'chunk_index': self.chunk_index,
+        }
+
 
 class PromptBuilder:
     """Builds prompts for RAG system using Gemma-3 chat templates."""
