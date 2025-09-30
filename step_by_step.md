@@ -3,18 +3,19 @@
 Use this checklist to implement the research plan end‑to‑end. We will update and tick items as we progress.
 
 ## Phase 0 — Environment & Data
-- [ ] Install dependencies (`pip install -r requirements.txt`); verify Python/pytest
-- [ ] Verify model file present at `models/gemma-3-4b-it-q4_0.gguf`
-- [ ] Prepare/curate clean documents under `data/corpus`
-- [ ] Ingest clean corpus with `create_document_ingester(...).ingest_directory()` to `collection_id="clean"`
-- [ ] Commit baseline corpus ingestion metadata (db path noted)
+- [x] Install dependencies (`pip install -r requirements.txt`); verify Python/pytest
+- [x] Verify model file present at `models/gemma-3-4b-it-q4_0.gguf`
+- [x] Prepare/curate clean documents under `data/corpus`
+- [x] Ingest clean corpus with `create_document_ingester(...).ingest_directory()` to `collection_id="clean"`
+- [x] Commit baseline corpus ingestion metadata (db path noted)
 
 ## Phase 1 — Baseline & Scaffolding
-- [ ] Ensure BM25/hybrid retrieval functional (tests already pass)
-- [ ] Configure pipeline and agent (no defenses), tools enabled: calculator, file_reader, web_search, database_query
-- [ ] Generate single‑turn attack dataset (all categories) via `AttackGenerator`
-- [ ] Run E1 baseline: compute ASR (per attack’s `measure_success`) and record latencies
-- [ ] Save baseline results to `experiments/baseline/` (JSON/CSV)
+- [x] Ensure BM25/hybrid retrieval functional (tests already pass)
+- [x] Configure pipeline (no defenses); verify heavy model path
+- [x] Fetch standardized datasets (deepset, injecagent, pint-example) into `data/attack_payloads/`
+- [x] Run E1 baseline (pilot, pipeline, deepset subset): compute ASR and latencies
+- [ ] Configure and run full E1 baseline across all datasets and agent mode
+- [ ] Save full baseline results to `experiments/baseline/` (JSON/CSV)
 
 ## Phase 2 — Individual Defenses (E2)
 - [ ] Toggle `input_sanitization` only in `config/defense_config.yaml`; rebuild `DefenseManager`
@@ -83,4 +84,3 @@ Use this checklist to implement the research plan end‑to‑end. We will update
 - [ ] Save raw outputs (JSON/CSV) per run under `experiments/`
 - [ ] Log config snapshots (agent/defense YAML, tool sets, retrieval settings)
 - [ ] Record environment (Python, packages, model hash, seed)
-

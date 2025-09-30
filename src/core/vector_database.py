@@ -205,8 +205,11 @@ class VectorDatabase:
 
             # Use FTS5 bm25() ranking (lower is better). We will convert to a
             # higher-is-better score for consistency with vector similarity.
+            # Use quoted phrase to reduce FTS5 syntax errors from arbitrary inputs
+            fts_query = '"' + query.replace('"', ' ') + '"'
             if collection_id:
-                cursor.execute(
+                try:
+                    cursor.execute(
                     """
                     SELECT f.chunk_id,
                            bm25(chunks_fts) AS bm25_score,
@@ -218,10 +221,13 @@ class VectorDatabase:
                     ORDER BY bm25_score ASC
                     LIMIT ?
                     """,
-                    (query, collection_id, k),
+                    (fts_query, collection_id, k),
                 )
+                except Exception:
+                    return []
             else:
-                cursor.execute(
+                try:
+                    cursor.execute(
                     """
                     SELECT f.chunk_id,
                            bm25(chunks_fts) AS bm25_score,
@@ -233,8 +239,10 @@ class VectorDatabase:
                     ORDER BY bm25_score ASC
                     LIMIT ?
                     """,
-                    (query, k),
+                    (fts_query, k),
                 )
+                except Exception:
+                    return []
 
             rows = cursor.fetchall()
             results = []
