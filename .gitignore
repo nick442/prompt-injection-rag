@@ -30,3 +30,6 @@
   # Experiments
   experiments/*/results/
   experiments/*/logs/
+# Local configuration
+CLAUDE.md
+.serena/
