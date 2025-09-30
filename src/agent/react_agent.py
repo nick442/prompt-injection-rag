@@ -16,6 +16,10 @@ from ..core.rag_pipeline import RAGPipeline
 from .tool_registry import ToolRegistry, build_tool_registry_from_config
 from .tool_parser import ToolParser
 from .tool_executor import ToolExecutor
+try:
+    from ..defenses.defense_manager import DefenseManager, create_defense_manager
+except Exception:
+    DefenseManager = None  # type: ignore
 
 
 class ReACTAgent:
@@ -33,7 +37,8 @@ class ReACTAgent:
                  max_iterations: int = 10, temperature: float = 0.7,
                  parser_strict_validation: bool = False,
                  enable_logging: bool = True,
-                 require_approval: bool = False):
+                 require_approval: bool = False,
+                 defense_manager: Optional["DefenseManager"] = None):
         """
         Initialize ReACT agent.
 
@@ -59,6 +64,8 @@ class ReACTAgent:
 
         # Reasoning trace
         self.trace = []
+        # Optional defenses
+        self.defense_manager = defense_manager
 
     def run(self, query: str, use_rag: bool = True, collection_id: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -116,6 +123,10 @@ class ReACTAgent:
 
             # Parse tool calls
             tool_calls = self.tool_parser.parse(llm_output)
+
+            # Apply output-stage defenses (validation, guardrails)
+            if self.defense_manager is not None and tool_calls:
+                _, tool_calls, _ = self.defense_manager.apply_output_defenses(llm_output, tool_calls)
 
             if not tool_calls:
                 # No tool calls found, treat as final answer
@@ -203,6 +214,7 @@ def create_react_agent(
     tool_registry: Optional[ToolRegistry] = None,
     tools: Optional[List[str]] = None,
     agent_config_path: Optional[str] = None,
+    defense_config_path: Optional[str] = None,
     **kwargs,
 ) -> ReACTAgent:
     """Factory function to create a ReACTAgent.
@@ -241,6 +253,13 @@ def create_react_agent(
     parser_strict = kwargs.pop("parser_strict_validation", parsing_cfg.get("strict_validation", False))
     require_approval = kwargs.pop("require_approval", safety_cfg.get("require_approval", False))
 
+    # Optional defense manager
+    defense_manager = None
+    try:
+        defense_manager = create_defense_manager(tool_registry=tool_registry, config_path=defense_config_path)
+    except Exception:
+        defense_manager = None
+
     return ReACTAgent(
         rag_pipeline,
         tool_registry,
@@ -249,5 +268,6 @@ def create_react_agent(
         parser_strict_validation=parser_strict,
         enable_logging=enable_logging,
         require_approval=require_approval,
+        defense_manager=defense_manager,
         **kwargs,
     )
