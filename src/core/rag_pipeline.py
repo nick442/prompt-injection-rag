@@ -10,12 +10,18 @@ from .retriever import Retriever, create_retriever
 from .prompt_builder import PromptBuilder, create_prompt_builder
 from .llm_wrapper import LLMWrapper, create_llm_wrapper
 
+try:
+    from ..defenses.defense_manager import DefenseManager
+except Exception:
+    DefenseManager = None  # type: ignore
+
 
 class RAGPipeline:
     """Simplified RAG pipeline for prompt injection research."""
 
     def __init__(self, db_path: str, embedding_model_path: str, llm_model_path: str,
-                 config: Optional[Dict[str, Any]] = None):
+                 config: Optional[Dict[str, Any]] = None,
+                 defense_manager: Optional["DefenseManager"] = None):
         """
         Initialize the RAG pipeline.
 
@@ -31,6 +37,7 @@ class RAGPipeline:
         self.config = config or {}
 
         self.logger = logging.getLogger(__name__)
+        self.defense_manager = defense_manager
 
         # Initialize components
         self.logger.info("Initializing RAG pipeline...")
@@ -79,11 +86,27 @@ class RAGPipeline:
 
         self.logger.info(f"Retrieved {len(retrieved_contexts)} contexts")
 
+        # Optional: Apply input-stage defenses (sanitization, prompt engineering)
+        effective_query = user_query
+        effective_system_prompt = system_prompt
+        if self.defense_manager is not None:
+            contexts_text = [ctx.content for ctx in retrieved_contexts]
+            ok, components, _ = self.defense_manager.apply_input_defenses(
+                user_query, contexts_text, system_prompt
+            )
+            effective_query = components.get("query", user_query)
+            new_contexts = components.get("contexts", contexts_text)
+            effective_system_prompt = components.get("system_prompt", system_prompt)
+            # Replace contents on the RetrievalResult objects
+            for i, ctx in enumerate(retrieved_contexts):
+                if i < len(new_contexts):
+                    ctx.content = new_contexts[i]
+
         # Step 2: Build prompt (⚠️ VULNERABLE BY DESIGN ⚠️)
         prompt = self.prompt_builder.build_rag_prompt(
-            user_query,
+            effective_query,
             retrieved_contexts,
-            system_prompt=system_prompt
+            system_prompt=effective_system_prompt
         )
 
         # Step 3: Generate answer
@@ -113,7 +136,15 @@ class RAGPipeline:
         Returns:
             Dictionary with answer and metadata
         """
-        prompt = self.prompt_builder.build_simple_prompt(user_query, system_prompt)
+        # Optional: apply input-stage defenses even for no-RAG prompt
+        effective_query = user_query
+        effective_system_prompt = system_prompt
+        if self.defense_manager is not None:
+            ok, components, _ = self.defense_manager.apply_input_defenses(user_query, [], system_prompt)
+            effective_query = components.get("query", user_query)
+            effective_system_prompt = components.get("system_prompt", system_prompt)
+
+        prompt = self.prompt_builder.build_simple_prompt(effective_query, effective_system_prompt)
         answer = self.llm_wrapper.generate(prompt, **generation_kwargs)
 
         return {
@@ -127,6 +158,7 @@ class RAGPipeline:
 
 
 def create_rag_pipeline(db_path: str, embedding_model_path: str,
-                       llm_model_path: str, config: Optional[Dict[str, Any]] = None) -> RAGPipeline:
+                       llm_model_path: str, config: Optional[Dict[str, Any]] = None,
+                       defense_manager: Optional["DefenseManager"] = None) -> RAGPipeline:
     """Factory function to create a RAGPipeline instance."""
-    return RAGPipeline(db_path, embedding_model_path, llm_model_path, config)
+    return RAGPipeline(db_path, embedding_model_path, llm_model_path, config, defense_manager)
